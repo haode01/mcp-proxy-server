@@ -1,4 +1,4 @@
-# 🚀 romate-mcp-server
+# 🚀 mcp-proxy-server
 
 **HTTP MCP Gateway** — 将本地 stdio MCP 工具暴露为 HTTP/SSE 协议。
 

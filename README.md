@@ -26,7 +26,7 @@
 ### 安装
 
 ```bash
-git clone <your-repo> && cd romate-mcp-server
+git clone https://github.com/haode01/mcp-proxy-server.git && cd romate-mcp-server
 npm install
 npm run build
 ```

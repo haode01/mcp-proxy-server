@@ -32,7 +32,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 }
 
 /** 默认超时时间 */
-const DEFAULT_HANDSHAKE_TIMEOUT = 10_000;  // 握手超时 10s
+const DEFAULT_HANDSHAKE_TIMEOUT = 10_000;  // 握手超时 10s（可被 config.handshakeTimeout 覆盖）
 const DEFAULT_TOOL_CALL_TIMEOUT = 60_000;  // 工具调用超时 60s
 
 /**
@@ -87,7 +87,7 @@ export class McpProxy {
     this.status = "starting";
 
     try {
-      await withTimeout(this.spawnProcess(), DEFAULT_HANDSHAKE_TIMEOUT, `[${this.name}] 握手`);
+      await withTimeout(this.spawnProcess(), this.config.handshakeTimeout ?? DEFAULT_HANDSHAKE_TIMEOUT, `[${this.name}] 握手`);
       await this.performHandshake();
       this.status = "running";
       console.log(`[${this.name}] 启动成功，工具数: ${this.toolsCache.length}`);
@@ -207,7 +207,16 @@ export class McpProxy {
       stderr: "pipe",
     });
 
-    // 监听 stderr 输出
+    // 捕获子进程 stderr，方便诊断启动失败原因
+    const stderrStream = (this.transport as unknown as { stderr?: NodeJS.ReadableStream }).stderr;
+    if (stderrStream) {
+      stderrStream.on("data", (chunk: Buffer) => {
+        const line = chunk.toString().trimEnd();
+        if (line) console.log(`[${this.name}] stderr: ${line}`);
+      });
+    }
+
+    // 监听 transport 错误
     this.transport.onerror = (err) => {
       console.error(`[${this.name}] transport 错误:`, err);
     };

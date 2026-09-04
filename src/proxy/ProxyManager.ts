@@ -20,8 +20,8 @@ export class ProxyManager {
     const results = await Promise.allSettled(
       configs.map(async (cfg) => {
         const proxy = new McpProxy(cfg);
+        this.proxies.set(cfg.name, proxy); // 先注册，保证 404 → 503
         await proxy.start();
-        this.proxies.set(cfg.name, proxy);
       })
     );
 
@@ -146,8 +146,8 @@ export class ProxyManager {
         // 新增
         try {
           const proxy = new McpProxy(cfg);
+          this.proxies.set(cfg.name, proxy); // 先注册
           await proxy.start();
-          this.proxies.set(cfg.name, proxy);
           result.added.push(cfg.name);
           console.log(`[hot-reload] 已新增代理: ${cfg.name}`);
         } catch (err) {

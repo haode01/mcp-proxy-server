@@ -10,6 +10,7 @@ export const ToolConfigSchema = z.object({
   cwd: z.string().optional(),
   restart: z.boolean().optional().default(true),
   restartDelay: z.number().nonnegative().optional().default(2000),
+  handshakeTimeout: z.number().positive().optional().default(10_000),
 });
 
 export type ToolConfig = z.infer<typeof ToolConfigSchema>;

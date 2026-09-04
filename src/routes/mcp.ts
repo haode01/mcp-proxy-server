@@ -138,8 +138,11 @@ export function registerMcpRoutes(
       try {
         const result = await handleAggregatedRequest(proxyManager, method, body);
 
-        const session = sseSessions.get(sessionId)!;
-        session.reply.raw.write(`event: message\ndata: ${JSON.stringify(result)}\n\n`);
+        // 通知没有响应，跳过 SSE 写入
+        if (result !== null) {
+          const session = sseSessions.get(sessionId)!;
+          session.reply.raw.write(`event: message\ndata: ${JSON.stringify(result)}\n\n`);
+        }
 
         return reply.code(202).send({ accepted: true });
       } catch (err: unknown) {
@@ -182,6 +185,8 @@ export function registerMcpRoutes(
 
       try {
         const result = await handleAggregatedRequest(proxyManager, method, body);
+        // 通知不需要响应体
+        if (result === null) return reply.code(204).send();
         return reply.send(result);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
@@ -331,10 +336,12 @@ export function registerMcpRoutes(
       try {
         const result = await handleMcpRequest(proxy, method, body);
 
-        // 通过 SSE 发送响应
-        const session = sseSessions.get(sessionId)!;
-        const data = JSON.stringify(result);
-        session.reply.raw.write(`event: message\ndata: ${data}\n\n`);
+        // 通知没有响应，跳过 SSE 写入
+        if (result !== null) {
+          const session = sseSessions.get(sessionId)!;
+          const data = JSON.stringify(result);
+          session.reply.raw.write(`event: message\ndata: ${data}\n\n`);
+        }
 
         return reply.code(202).send({ accepted: true });
       } catch (err: unknown) {
@@ -399,6 +406,8 @@ export function registerMcpRoutes(
 
       try {
         const result = await handleMcpRequest(proxy, method, body);
+        // 通知不需要响应体
+        if (result === null) return reply.code(204).send();
         return reply.send(result);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
@@ -504,12 +513,13 @@ async function handleMcpRequest(
       };
     }
 
-    case "notifications/initialized": {
-      return { jsonrpc: "2.0", result: null, id };
-    }
+    case "notifications/initialized":
+      return null; // 通知不需要响应
 
     // ===== 未知方法 =====
     default:
+      // 通知类方法（notifications/*）静默忽略
+      if (method.startsWith("notifications/")) return null;
       return {
         jsonrpc: "2.0",
         error: {
@@ -705,12 +715,12 @@ async function handleAggregatedRequest(
       };
     }
 
-    case "notifications/initialized": {
-      return { jsonrpc: "2.0", result: null, id };
-    }
+    case "notifications/initialized":
+      return null; // 通知不需要响应
 
     // ===== 未知方法 =====
     default:
+      if (method.startsWith("notifications/")) return null;
       return {
         jsonrpc: "2.0",
         error: {

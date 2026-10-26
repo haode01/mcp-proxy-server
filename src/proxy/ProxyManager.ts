@@ -155,13 +155,16 @@ export class ProxyManager {
           console.error(`[hot-reload] 新增 ${cfg.name} 失败:`, err);
         }
       } else {
-        // 更新 — 先停旧再启新
+        // 更新 — 配置未变且运行正常则跳过，避免保存配置文件时全量重启
+        const oldProxy = this.proxies.get(cfg.name)!;
+        const unchanged = JSON.stringify(oldProxy.settings) === JSON.stringify(cfg);
+        if (unchanged && oldProxy.proxyStatus === "running") continue;
+        // 先停旧再启新（配置变化，或上次启动失败需要重试）
         try {
-          const oldProxy = this.proxies.get(cfg.name)!;
           await oldProxy.stop();
           const proxy = new McpProxy(cfg);
+          this.proxies.set(cfg.name, proxy); // 先注册，保证启动期间 404 → 503
           await proxy.start();
-          this.proxies.set(cfg.name, proxy);
           result.updated.push(cfg.name);
           console.log(`[hot-reload] 已更新代理: ${cfg.name}`);
         } catch (err) {

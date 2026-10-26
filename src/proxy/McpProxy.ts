@@ -64,6 +64,11 @@ export class McpProxy {
     return this.config.description;
   }
 
+  /** 当前生效的配置，供热重载比对是否变化 */
+  get settings(): ToolConfig {
+    return this.config;
+  }
+
   get proxyStatus(): ProxyStatus {
     return this.status;
   }
@@ -90,6 +95,7 @@ export class McpProxy {
       await withTimeout(this.spawnProcess(), this.config.handshakeTimeout ?? DEFAULT_HANDSHAKE_TIMEOUT, `[${this.name}] 握手`);
       await this.performHandshake();
       this.status = "running";
+      this.restartAttempts = 0; // 启动成功后重置退避计数
       console.log(`[${this.name}] 启动成功，工具数: ${this.toolsCache.length}`);
     } catch (err) {
       this.status = "error";
@@ -243,7 +249,10 @@ export class McpProxy {
 
     // StdioClientTransport.start() 会 spawn 子进程
     // 但我们需要先 connect，start 会在 connect 中被调用
-    await this.client.connect(this.transport);
+    // SDK 默认 initialize 超时为 60s，这里同步改为握手超时，否则慢启动的服务会先被 SDK 超时
+    await this.client.connect(this.transport, {
+      timeout: this.config.handshakeTimeout ?? DEFAULT_HANDSHAKE_TIMEOUT,
+    });
   }
 
   private async performHandshake(): Promise<void> {
@@ -282,6 +291,8 @@ export class McpProxy {
   }
 
   private scheduleRestart(): void {
+    // 避免 close 事件和启动失败回调重复排程，只保留一个定时器
+    this.cancelRestart();
     this.restartAttempts++;
     const baseDelay = this.config.restartDelay ?? 2000;
     // 指数退避：baseDelay * 2^(attempts-1)，上限 maxRestartDelay
@@ -291,11 +302,13 @@ export class McpProxy {
     );
     console.log(`[${this.name}] ${delay}ms 后自动重启 (第 ${this.restartAttempts} 次尝试)...`);
     this.restartTimer = setTimeout(async () => {
+      this.restartTimer = null;
       try {
-        this.restartAttempts = 0; // 成功后重置计数
         await this.start();
       } catch (err) {
         console.error(`[${this.name}] 重启失败:`, err);
+        // 启动失败后继续排程下一次重试，直到成功或被 stop() 取消
+        if (!this.shutdownRequested) this.scheduleRestart();
       }
     }, delay);
   }
